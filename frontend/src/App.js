@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 const API = "http://localhost:5000";
 
@@ -12,315 +12,653 @@ function request(path, options = {}, token) {
     },
   }).then(async (res) => {
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Request failed");
+
+    if (!res.ok) {
+      throw new Error(data.message || "Request failed");
+    }
+
     return data;
   });
 }
 
-// ── Reusable UI components ──────────────────────────────────────────────────
+
+// =====================================================
+// ALERT COMPONENT
+// =====================================================
 
 function Alert({ type, message, onClose }) {
+
   if (!message) return null;
+
   const colors = {
-    error: { bg: "#FEE2E2", border: "#FCA5A5", text: "#991B1B" },
-    success: { bg: "#DCFCE7", border: "#86EFAC", text: "#166534" },
-    info: { bg: "#DBEAFE", border: "#93C5FD", text: "#1E40AF" },
+    error: {
+      bg: "#FEE2E2",
+      border: "#FCA5A5",
+      text: "#991B1B",
+    },
+    success: {
+      bg: "#DCFCE7",
+      border: "#86EFAC",
+      text: "#166534",
+    },
   };
-  const c = colors[type] || colors.info;
+
+  const c = colors[type] || colors.success;
+
   return (
-    <div style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text,
-      borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex",
-      justifyContent: "space-between", alignItems: "center", fontSize: 14 }}>
+    <div
+      style={{
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        color: c.text,
+        padding: "12px 14px",
+        borderRadius: 8,
+        marginBottom: 18,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}
+    >
       <span>{message}</span>
-      {onClose && (
-        <button onClick={onClose} style={{ background: "none", border: "none",
-          cursor: "pointer", color: c.text, fontWeight: 700, fontSize: 16, marginLeft: 12 }}>
-          ×
-        </button>
-      )}
+
+      <button
+        onClick={onClose}
+        style={{
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          color: c.text,
+          fontWeight: "bold",
+          fontSize: 16,
+        }}
+      >
+        ×
+      </button>
     </div>
   );
 }
+
+
+// =====================================================
+// INPUT COMPONENT
+// =====================================================
 
 function Input({ label, ...props }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      {label && <label style={{ display: "block", fontSize: 13, fontWeight: 600,
-        marginBottom: 4, color: "#374151" }}>{label}</label>}
-      <input {...props} style={{ width: "100%", padding: "9px 12px", border: "1px solid #D1D5DB",
-        borderRadius: 7, fontSize: 14, boxSizing: "border-box",
-        outline: "none", fontFamily: "inherit", ...props.style }} />
+      <label
+        style={{
+          display: "block",
+          marginBottom: 5,
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#374151",
+        }}
+      >
+        {label}
+      </label>
+
+      <input
+        {...props}
+        style={{
+          width: "100%",
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: "1px solid #D1D5DB",
+          fontSize: 14,
+          boxSizing: "border-box",
+        }}
+      />
     </div>
   );
 }
 
-function Button({ children, variant = "primary", loading, style: s, ...props }) {
-  const base = { padding: "9px 18px", borderRadius: 7, border: "none", cursor: "pointer",
-    fontSize: 14, fontWeight: 600, fontFamily: "inherit", transition: "opacity .15s" };
+
+// =====================================================
+// BUTTON COMPONENT
+// =====================================================
+
+function Button({
+  children,
+  variant = "primary",
+  loading,
+  style,
+  ...props
+}) {
+
   const variants = {
-    primary:  { background: "#4F46E5", color: "#fff" },
-    secondary: { background: "#F3F4F6", color: "#374151", border: "1px solid #D1D5DB" },
-    danger:   { background: "#EF4444", color: "#fff" },
-    ghost:    { background: "none", color: "#4F46E5", padding: "6px 10px" },
+    primary: {
+      background: "#4F46E5",
+      color: "#fff",
+    },
+
+    secondary: {
+      background: "#F3F4F6",
+      color: "#111827",
+      border: "1px solid #D1D5DB",
+    },
+
+    danger: {
+      background: "#DC2626",
+      color: "#fff",
+    },
   };
+
   return (
-    <button {...props} disabled={loading || props.disabled}
-      style={{ ...base, ...variants[variant], opacity: (loading || props.disabled) ? .6 : 1, ...s }}>
-      {loading ? "…" : children}
+    <button
+      {...props}
+      disabled={loading || props.disabled}
+      style={{
+        padding: "10px 16px",
+        borderRadius: 8,
+        border: "none",
+        cursor: "pointer",
+        fontWeight: 600,
+        fontSize: 14,
+        opacity: loading ? 0.7 : 1,
+        ...variants[variant],
+        ...style,
+      }}
+    >
+      {loading ? "Loading..." : children}
     </button>
   );
 }
 
-function Card({ children, style: s }) {
+
+// =====================================================
+// CARD COMPONENT
+// =====================================================
+
+function Card({ children, style }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #E5E7EB",
-      borderRadius: 10, padding: 20, ...s }}>
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid #E5E7EB",
+        borderRadius: 12,
+        padding: 20,
+        ...style,
+      }}
+    >
       {children}
     </div>
   );
 }
 
+
+// =====================================================
+// STATUS BADGE
+// =====================================================
+
 function Badge({ status }) {
-  const map = {
-    todo:        { bg: "#F3F4F6", color: "#6B7280", label: "To Do" },
-    in_progress: { bg: "#FEF3C7", color: "#92400E", label: "In Progress" },
-    done:        { bg: "#D1FAE5", color: "#065F46", label: "Done" },
+
+  const styles = {
+    todo: {
+      bg: "#F3F4F6",
+      color: "#6B7280",
+      label: "TO DO",
+    },
+
+    in_progress: {
+      bg: "#FEF3C7",
+      color: "#92400E",
+      label: "IN PROGRESS",
+    },
+
+    done: {
+      bg: "#DCFCE7",
+      color: "#166534",
+      label: "DONE",
+    },
   };
-  const { bg, color, label } = map[status] || map.todo;
+
+  const s = styles[status] || styles.todo;
+
   return (
-    <span style={{ background: bg, color, padding: "2px 9px", borderRadius: 20,
-      fontSize: 12, fontWeight: 600 }}>{label}</span>
+    <span
+      style={{
+        background: s.bg,
+        color: s.color,
+        padding: "4px 10px",
+        borderRadius: 20,
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      {s.label}
+    </span>
   );
 }
 
-// ── Auth screens ────────────────────────────────────────────────────────────
+
+// =====================================================
+// AUTH SCREEN
+// =====================================================
 
 function AuthScreen({ onLogin }) {
-  const [mode, setMode] = useState("login");       // "login" | "register"
+
+  const [mode, setMode] = useState("login");
+
   const [email, setEmail] = useState("");
+
   const [password, setPassword] = useState("");
+
   const [alert, setAlert] = useState(null);
+
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+
+  async function handleSubmit(e) {
+
     e.preventDefault();
+
     setAlert(null);
+
     setLoading(true);
+
     try {
+
       if (mode === "register") {
+
         await request("/auth/register", {
           method: "POST",
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({
+            email,
+            password,
+          }),
         });
-        setAlert({ type: "success", message: "Registered! Please log in." });
+
+        setAlert({
+          type: "success",
+          message: "Registration successful. Please log in.",
+        });
+
         setMode("login");
+
       } else {
+
         const data = await request("/auth/login", {
           method: "POST",
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({
+            email,
+            password,
+          }),
         });
+
         localStorage.setItem("token", data.token);
+
         onLogin(data.token);
       }
+
     } catch (err) {
-      setAlert({ type: "error", message: err.message });
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
+
     } finally {
+
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center",
-      justifyContent: "center", background: "#F9FAFB" }}>
-      <Card style={{ width: 380 }}>
-        <h1 style={{ margin: "0 0 6px", fontSize: 24, fontWeight: 700, color: "#111827" }}>
-          Team Collaboration
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#F9FAFB",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <Card style={{ width: 420 }}>
+
+        <h1
+          style={{
+            marginTop: 0,
+            marginBottom: 8,
+            fontSize: 28,
+            color: "#111827",
+          }}
+        >
+          Secure Team Collaboration Platform
         </h1>
-        <p style={{ margin: "0 0 24px", fontSize: 14, color: "#6B7280" }}>
-          {mode === "login" ? "Sign in to your account" : "Create a new account"}
+
+        <p
+          style={{
+            color: "#6B7280",
+            fontSize: 14,
+            marginBottom: 24,
+          }}
+        >
+          JWT Authentication • RBAC • Microservice Architecture
         </p>
 
-        {alert && <Alert {...alert} onClose={() => setAlert(null)} />}
+        {alert && (
+          <Alert
+            {...alert}
+            onClose={() => setAlert(null)}
+          />
+        )}
 
         <form onSubmit={handleSubmit}>
-          <Input label="Email" type="email" value={email} required
-            placeholder="you@example.com" onChange={(e) => setEmail(e.target.value)} />
-          <Input label="Password" type="password" value={password} required
-            placeholder="••••••••" onChange={(e) => setPassword(e.target.value)} />
-          <Button type="submit" loading={loading} style={{ width: "100%", marginTop: 4 }}>
-            {mode === "login" ? "Sign In" : "Create Account"}
+
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            placeholder="you@example.com"
+            required
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <Input
+            label="Password"
+            type="password"
+            value={password}
+            placeholder="••••••••"
+            required
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <Button
+            type="submit"
+            loading={loading}
+            style={{
+              width: "100%",
+              marginTop: 8,
+            }}
+          >
+            {mode === "login"
+              ? "Sign In"
+              : "Create Account"}
           </Button>
         </form>
 
-        <p style={{ textAlign: "center", marginTop: 18, fontSize: 13, color: "#6B7280" }}>
-          {mode === "login" ? "No account? " : "Already registered? "}
-          <button onClick={() => { setMode(mode === "login" ? "register" : "login"); setAlert(null); }}
-            style={{ background: "none", border: "none", color: "#4F46E5",
-              cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
-            {mode === "login" ? "Register" : "Sign In"}
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: 18,
+            fontSize: 13,
+          }}
+        >
+          {mode === "login"
+            ? "No account?"
+            : "Already have an account?"}
+
+          <button
+            onClick={() => {
+              setMode(
+                mode === "login"
+                  ? "register"
+                  : "login"
+              );
+            }}
+            style={{
+              marginLeft: 6,
+              border: "none",
+              background: "none",
+              color: "#4F46E5",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            {mode === "login"
+              ? "Register"
+              : "Sign In"}
           </button>
         </p>
+
       </Card>
     </div>
   );
 }
 
-// ── Task panel ──────────────────────────────────────────────────────────────
 
-function TaskPanel({ team, token, userId, onBack }) {
+// =====================================================
+// TASK PANEL
+// =====================================================
+
+function TaskPanel({
+  team,
+  token,
+  userId,
+  onBack,
+}) {
+
   const [tasks, setTasks] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+
   const [title, setTitle] = useState("");
+
   const [description, setDescription] = useState("");
+
   const [alert, setAlert] = useState(null);
+
   const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editFields, setEditFields] = useState({});
+
 
   const loadTasks = useCallback(async () => {
-    setLoading(true);
+
     try {
-      const data = await request(`/teams/${team.id}/tasks`, {}, token);
+
+      const data = await request(
+        `/teams/${team.id}/tasks`,
+        {},
+        token
+      );
+
       setTasks(data.tasks || []);
-      setLoaded(true);
+
     } catch (err) {
-      setAlert({ type: "error", message: err.message });
-    } finally {
-      setLoading(false);
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
     }
+
   }, [team.id, token]);
 
-  useState(() => { loadTasks(); }, []);  // load on mount
 
-  const createTask = async (e) => {
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+
+  async function createTask(e) {
+
     e.preventDefault();
-    if (!title.trim()) return;
+
     setLoading(true);
-    setAlert(null);
+
     try {
-      await request(`/teams/${team.id}/tasks`, {
-        method: "POST",
-        body: JSON.stringify({ title, description, status: "todo" }),
-      }, token);
+
+      await request(
+        `/teams/${team.id}/tasks`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title,
+            description,
+            status: "todo",
+          }),
+        },
+        token
+      );
+
       setTitle("");
       setDescription("");
-      await loadTasks();
-      setAlert({ type: "success", message: "Task created" });
-    } catch (err) {
-      setAlert({ type: "error", message: err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const saveEdit = async (taskId) => {
-    setLoading(true);
-    try {
-      await request(`/teams/${team.id}/tasks/${taskId}`, {
-        method: "PATCH",
-        body: JSON.stringify(editFields),
-      }, token);
-      setEditingId(null);
       await loadTasks();
-    } catch (err) {
-      setAlert({ type: "error", message: err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const deleteTask = async (taskId) => {
-    if (!window.confirm("Delete this task?")) return;
-    setLoading(true);
-    try {
-      await request(`/teams/${team.id}/tasks/${taskId}`, { method: "DELETE" }, token);
-      await loadTasks();
     } catch (err) {
-      setAlert({ type: "error", message: err.message });
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
+
     } finally {
+
       setLoading(false);
     }
-  };
+  }
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <Button variant="ghost" onClick={onBack} style={{ padding: "6px 0" }}>← Back</Button>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{team.name}</h2>
-          {team.description && <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{team.description}</p>}
+
+      <Button
+        variant="secondary"
+        onClick={onBack}
+        style={{ marginBottom: 20 }}
+      >
+        ← Back to Teams
+      </Button>
+
+      <Card style={{ marginBottom: 24 }}>
+
+        <h2 style={{ marginTop: 0 }}>
+          {team.name}
+        </h2>
+
+        <p style={{ color: "#6B7280" }}>
+          {team.description}
+        </p>
+
+        <div
+          style={{
+            marginTop: 14,
+            display: "inline-block",
+            background:
+              team.role === "admin"
+                ? "#FEE2E2"
+                : "#DBEAFE",
+
+            color:
+              team.role === "admin"
+                ? "#991B1B"
+                : "#1E40AF",
+
+            padding: "6px 12px",
+            borderRadius: 20,
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          {team.role.toUpperCase()}
         </div>
-      </div>
 
-      {alert && <Alert {...alert} onClose={() => setAlert(null)} />}
+        <p
+          style={{
+            marginTop: 12,
+            fontSize: 13,
+            color: "#6B7280",
+          }}
+        >
+          {team.role === "admin"
+            ? "Admins can manage all tasks and team members."
+            : "Members can manage only their own tasks."}
+        </p>
 
-      <Card style={{ marginBottom: 20 }}>
-        <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 600 }}>Add Task</h3>
+      </Card>
+
+      {alert && (
+        <Alert
+          {...alert}
+          onClose={() => setAlert(null)}
+        />
+      )}
+
+      <Card style={{ marginBottom: 24 }}>
+
+        <h3>Create Task</h3>
+
         <form onSubmit={createTask}>
-          <Input label="Title" value={title} required placeholder="What needs to be done?"
-            onChange={(e) => setTitle(e.target.value)} />
-          <Input label="Description (optional)" value={description}
-            placeholder="Add more detail…" onChange={(e) => setDescription(e.target.value)} />
-          <Button type="submit" loading={loading}>Create Task</Button>
+
+          <Input
+            label="Task Title"
+            value={title}
+            required
+            onChange={(e) => setTitle(e.target.value)}
+          />
+
+          <Input
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+
+          <Button
+            type="submit"
+            loading={loading}
+          >
+            Create Task
+          </Button>
+
         </form>
       </Card>
 
-      <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
-        Tasks {loaded && `(${tasks.length})`}
-      </h3>
+      <h3>Tasks</h3>
 
-      {!loaded && <p style={{ color: "#6B7280", fontSize: 14 }}>Loading…</p>}
-      {loaded && tasks.length === 0 && (
-        <p style={{ color: "#9CA3AF", fontSize: 14 }}>No tasks yet. Create one above.</p>
+      {tasks.length === 0 && (
+        <p>No tasks available.</p>
       )}
 
       {tasks.map((task) => {
-        const isEditing = editingId === task.id;
-        const canEdit = task.creator_id === userId;
+
+        const canManage =
+          task.creator_id === userId ||
+          team.role === "admin";
+
         return (
-          <Card key={task.id} style={{ marginBottom: 10 }}>
-            {isEditing ? (
+          <Card
+            key={task.id}
+            style={{ marginBottom: 12 }}
+          >
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
+
               <div>
-                <Input value={editFields.title}
-                  onChange={(e) => setEditFields({ ...editFields, title: e.target.value })} />
-                <Input value={editFields.description || ""}
-                  placeholder="Description"
-                  onChange={(e) => setEditFields({ ...editFields, description: e.target.value })} />
-                <select value={editFields.status}
-                  onChange={(e) => setEditFields({ ...editFields, status: e.target.value })}
-                  style={{ padding: "8px 10px", borderRadius: 7, border: "1px solid #D1D5DB",
-                    fontSize: 14, marginBottom: 12, fontFamily: "inherit" }}>
-                  <option value="todo">To Do</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="done">Done</option>
-                </select>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Button onClick={() => saveEdit(task.id)} loading={loading}>Save</Button>
-                  <Button variant="secondary" onClick={() => setEditingId(null)}>Cancel</Button>
-                </div>
+
+                <h4 style={{ margin: 0 }}>
+                  {task.title}
+                </h4>
+
+                <p
+                  style={{
+                    color: "#6B7280",
+                    fontSize: 14,
+                  }}
+                >
+                  {task.description}
+                </p>
+
+                <Badge status={task.status} />
+
               </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{task.title}</div>
-                  {task.description && (
-                    <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 6 }}>
-                      {task.description}
-                    </div>
-                  )}
-                  <Badge status={task.status} />
+
+              {canManage && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#6B7280",
+                  }}
+                >
+                  Authorized User
                 </div>
-                {canEdit && (
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 12 }}>
-                    <Button variant="secondary" onClick={() => {
-                      setEditingId(task.id);
-                      setEditFields({ title: task.title, description: task.description || "", status: task.status });
-                    }}>Edit</Button>
-                    <Button variant="danger" onClick={() => deleteTask(task.id)}>Delete</Button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+
+            </div>
+
           </Card>
         );
       })}
@@ -328,167 +666,419 @@ function TaskPanel({ team, token, userId, onBack }) {
   );
 }
 
-// ── Teams list ──────────────────────────────────────────────────────────────
 
-function TeamsScreen({ token, userId, onSelectTeam }) {
+// =====================================================
+// TEAMS SCREEN
+// =====================================================
+
+function TeamsScreen({
+  token,
+  userId,
+  onSelectTeam,
+}) {
+
   const [teams, setTeams] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+
   const [name, setName] = useState("");
+
   const [description, setDescription] = useState("");
+
   const [alert, setAlert] = useState(null);
+
   const [loading, setLoading] = useState(false);
 
+
   const loadTeams = useCallback(async () => {
+
     try {
-      const data = await request("/teams", {}, token);
+
+      const data = await request(
+        "/teams",
+        {},
+        token
+      );
+
       setTeams(data.teams || []);
-      setLoaded(true);
+
     } catch (err) {
-      setAlert({ type: "error", message: err.message });
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
     }
+
   }, [token]);
 
-  useState(() => { loadTeams(); }, []);
 
-  const createTeam = async (e) => {
+  useEffect(() => {
+    loadTeams();
+  }, [loadTeams]);
+
+
+  async function createTeam(e) {
+
     e.preventDefault();
-    if (!name.trim()) return;
+
     setLoading(true);
-    setAlert(null);
+
     try {
-      await request("/teams", {
-        method: "POST",
-        body: JSON.stringify({ name, description }),
-      }, token);
+
+      await request(
+        "/teams",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name,
+            description,
+          }),
+        },
+        token
+      );
+
       setName("");
       setDescription("");
+
       await loadTeams();
-      setAlert({ type: "success", message: "Team created" });
+
     } catch (err) {
-      setAlert({ type: "error", message: err.message });
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
+
     } finally {
+
       setLoading(false);
     }
-  };
-
-  const deleteTeam = async (teamId) => {
-    if (!window.confirm("Delete this team and all its tasks?")) return;
-    try {
-      await request(`/teams/${teamId}`, { method: "DELETE" }, token);
-      await loadTeams();
-    } catch (err) {
-      setAlert({ type: "error", message: err.message });
-    }
-  };
+  }
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 700 }}>My Teams</h2>
-
-      {alert && <Alert {...alert} onClose={() => setAlert(null)} />}
 
       <Card style={{ marginBottom: 24 }}>
-        <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 600 }}>Create Team</h3>
+
+        <h2
+          style={{
+            marginTop: 0,
+            marginBottom: 10,
+          }}
+        >
+          Collaboration Dashboard
+        </h2>
+
+        <p
+          style={{
+            color: "#6B7280",
+            lineHeight: 1.6,
+          }}
+        >
+          This platform demonstrates secure
+          microservice architecture using
+          JWT authentication,
+          role-based access control,
+          protected API routes,
+          centralized gateway routing,
+          and audit logging.
+        </p>
+
+      </Card>
+
+      {alert && (
+        <Alert
+          {...alert}
+          onClose={() => setAlert(null)}
+        />
+      )}
+
+      <Card style={{ marginBottom: 24 }}>
+
+        <h3>Create Team</h3>
+
         <form onSubmit={createTeam}>
-          <Input label="Team Name" value={name} required placeholder="e.g. Frontend Squad"
-            onChange={(e) => setName(e.target.value)} />
-          <Input label="Description (optional)" value={description}
-            placeholder="What does this team work on?"
-            onChange={(e) => setDescription(e.target.value)} />
-          <Button type="submit" loading={loading}>Create Team</Button>
+
+          <Input
+            label="Team Name"
+            value={name}
+            required
+            onChange={(e) => setName(e.target.value)}
+          />
+
+          <Input
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+
+          <Button
+            type="submit"
+            loading={loading}
+          >
+            Create Team
+          </Button>
+
         </form>
       </Card>
 
-      {!loaded && <p style={{ color: "#6B7280", fontSize: 14 }}>Loading teams…</p>}
-      {loaded && teams.length === 0 && (
-        <p style={{ color: "#9CA3AF", fontSize: 14 }}>No teams yet. Create one above.</p>
+      <h3>Your Teams</h3>
+
+      {teams.length === 0 && (
+        <p>No teams available.</p>
       )}
 
       {teams.map((team) => (
-        <Card key={team.id} style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+
+        <Card
+          key={team.id}
+          style={{ marginBottom: 12 }}
+        >
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+
             <div>
-              <div style={{ fontWeight: 600 }}>{team.name}</div>
-              {team.description && (
-                <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>{team.description}</div>
-              )}
-              <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 4 }}>
-                Role: <strong>{team.role}</strong>
+
+              <h4
+                style={{
+                  margin: 0,
+                  marginBottom: 6,
+                }}
+              >
+                {team.name}
+              </h4>
+
+              <p
+                style={{
+                  color: "#6B7280",
+                  fontSize: 14,
+                }}
+              >
+                {team.description}
+              </p>
+
+              <div
+                style={{
+                  display: "inline-block",
+                  marginTop: 6,
+                  background:
+                    team.role === "admin"
+                      ? "#FEE2E2"
+                      : "#DBEAFE",
+
+                  color:
+                    team.role === "admin"
+                      ? "#991B1B"
+                      : "#1E40AF",
+
+                  padding: "5px 10px",
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {team.role.toUpperCase()}
               </div>
+
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button onClick={() => onSelectTeam(team)}>View Tasks</Button>
-              {team.owner_id === userId && (
-                <Button variant="danger" onClick={() => deleteTeam(team.id)}>Delete</Button>
-              )}
-            </div>
+
+            <Button
+              onClick={() => onSelectTeam(team)}
+            >
+              Open Workspace
+            </Button>
+
           </div>
+
         </Card>
       ))}
     </div>
   );
 }
 
-// ── Root App ────────────────────────────────────────────────────────────────
+
+// =====================================================
+// ROOT APP
+// =====================================================
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
-  const [userId, setUserId] = useState(() => {
-    try {
-      const t = localStorage.getItem("token");
-      if (!t) return null;
-      return JSON.parse(atob(t.split(".")[1])).userId;
-    } catch { return null; }
-  });
-  const [selectedTeam, setSelectedTeam] = useState(null);
 
-  const handleLogin = (newToken) => {
+  const [token, setToken] = useState(
+    localStorage.getItem("token") || ""
+  );
+
+  const [userId, setUserId] = useState(null);
+
+  const [userEmail, setUserEmail] = useState("");
+
+  const [selectedTeam, setSelectedTeam] =
+    useState(null);
+
+
+  useEffect(() => {
+
+    try {
+
+      if (!token) return;
+
+      const decoded = JSON.parse(
+        atob(token.split(".")[1])
+      );
+
+      setUserId(decoded.userId);
+
+      setUserEmail(decoded.email);
+
+    } catch (err) {
+
+      console.error(err);
+    }
+
+  }, [token]);
+
+
+  function handleLogin(newToken) {
+
+    localStorage.setItem(
+      "token",
+      newToken
+    );
+
     setToken(newToken);
-    try {
-      setUserId(JSON.parse(atob(newToken.split(".")[1])).userId);
-    } catch { setUserId(null); }
-  };
+  }
 
-  const handleLogout = () => {
+
+  function handleLogout() {
+
     localStorage.removeItem("token");
-    setToken("");
-    setUserId(null);
-    setSelectedTeam(null);
-  };
 
-  if (!token) return <AuthScreen onLogin={handleLogin} />;
+    setToken("");
+
+    setUserId(null);
+
+    setUserEmail("");
+
+    setSelectedTeam(null);
+  }
+
+
+  if (!token) {
+    return (
+      <AuthScreen
+        onLogin={handleLogin}
+      />
+    );
+  }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F9FAFB", fontFamily:
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#F9FAFB",
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      }}
+    >
 
-      {/* Nav */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #E5E7EB",
-        padding: "0 24px", display: "flex", alignItems: "center",
-        justifyContent: "space-between", height: 56 }}>
-        <span style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>
-          Team Collaboration
-        </span>
-        <Button variant="secondary" onClick={handleLogout}>Sign Out</Button>
+      <div
+        style={{
+          background: "#fff",
+          borderBottom: "1px solid #E5E7EB",
+          padding: "16px 24px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+
+        <div>
+
+          <div
+            style={{
+              fontWeight: 700,
+              fontSize: 20,
+              color: "#111827",
+            }}
+          >
+            Secure Team Collaboration Platform
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              color: "#6B7280",
+              marginTop: 4,
+            }}
+          >
+            JWT Authentication • RBAC • Logging • API Gateway
+          </div>
+
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+
+          <div
+            style={{
+              fontSize: 13,
+              color: "#374151",
+            }}
+          >
+            {userEmail}
+          </div>
+
+          <Button
+            variant="secondary"
+            onClick={handleLogout}
+          >
+            Sign Out
+          </Button>
+
+        </div>
+
       </div>
 
-      {/* Content */}
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px" }}>
+      <div
+        style={{
+          maxWidth: 900,
+          margin: "0 auto",
+          padding: 24,
+        }}
+      >
+
         {selectedTeam ? (
+
           <TaskPanel
             team={selectedTeam}
             token={token}
             userId={userId}
-            onBack={() => setSelectedTeam(null)}
+            onBack={() =>
+              setSelectedTeam(null)
+            }
           />
+
         ) : (
+
           <TeamsScreen
             token={token}
             userId={userId}
             onSelectTeam={setSelectedTeam}
           />
+
         )}
+
       </div>
+
     </div>
   );
 }
