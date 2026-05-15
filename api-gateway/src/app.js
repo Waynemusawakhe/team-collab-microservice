@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const { createProxyMiddleware } = require("http-proxy-middleware");
@@ -8,7 +9,14 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// SECURITY: Helmet middleware adds HTTP response headers to prevent common web vulnerabilities
+// This protects against: clickjacking (X-Frame-Options), XSS (CSP), MIME sniffing, etc.
+app.use(helmet());
+
+// CORS: Allow requests from different origins (frontend on port 3000, other microservices)
 app.use(cors());
+
+// LOGGING: Log all HTTP requests (method, path, response time) for debugging and monitoring
 app.use(morgan("dev"));
 
 const generalLimiter = rateLimit({
