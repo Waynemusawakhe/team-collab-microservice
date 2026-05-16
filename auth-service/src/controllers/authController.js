@@ -1,6 +1,12 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const users = require("../data/users");
+// MONITORING: Import metrics for auth security tracking
+const {
+  failedLoginAttempts,
+  successfulRegistrations,
+  activeJWTTokens,
+} = require("../utils/metrics");
 
 const registerUser = async (req, res) => {
   try {
@@ -26,6 +32,9 @@ const registerUser = async (req, res) => {
 
     users.push(newUser);
 
+    // MONITORING: Track successful registration for user growth metrics
+    successfulRegistrations.inc();
+
     res.status(201).json({
       message: "User registered successfully",
       user: {
@@ -50,6 +59,8 @@ const loginUser = async (req, res) => {
     const user = users.find((user) => user.email === email);
 
     if (!user) {
+      // MONITORING: Track failed login due to invalid email (security incident)
+      failedLoginAttempts.labels("invalid_email").inc();
       return res.status(401).json({
         message: "Invalid email or password",
       });
@@ -58,6 +69,8 @@ const loginUser = async (req, res) => {
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
 
     if (!isPasswordCorrect) {
+      // MONITORING: Track failed login due to wrong password (brute force attempt)
+      failedLoginAttempts.labels("invalid_password").inc();
       return res.status(401).json({
         message: "Invalid email or password",
       });
@@ -72,6 +85,9 @@ const loginUser = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
+
+    // MONITORING: Increment active token count (tracks estimated active users)
+    activeJWTTokens.inc();
 
     res.status(200).json({
       message: "Login successful",

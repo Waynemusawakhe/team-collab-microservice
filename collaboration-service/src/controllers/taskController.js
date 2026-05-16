@@ -1,5 +1,7 @@
 const tasks = require("../data/tasks");
 const teams = require("../data/teams");
+// MONITORING: Import metrics for collaboration tracking
+const { authorizationFailures, taskStatusChanges } = require("../utils/metrics");
 
 const createTask = (req, res) => {
   try {
@@ -19,6 +21,8 @@ const createTask = (req, res) => {
     );
 
     if (!isMember) {
+      // MONITORING: Track authorization failure - not team member
+      authorizationFailures.labels("task", "not_team_member").inc();
       return res.status(403).json({
         message: "Access denied. You are not a member of this team.",
       });
@@ -65,6 +69,8 @@ const getTasksByTeam = (req, res) => {
     );
 
     if (!isMember) {
+      // MONITORING: Track authorization failure - not team member
+      authorizationFailures.labels("task", "not_team_member").inc();
       return res.status(403).json({
         message: "Access denied. You are not a member of this team.",
       });
@@ -104,6 +110,8 @@ const updateTask = (req, res) => {
     );
 
     if (!member) {
+      // MONITORING: Track authorization failure - not team member
+      authorizationFailures.labels("task", "not_team_member").inc();
       return res.status(403).json({
         message: "Access denied. You are not a member of this team.",
       });
@@ -121,6 +129,8 @@ const updateTask = (req, res) => {
     }
 
     if (member.role !== "admin" && task.createdBy !== req.user.id) {
+      // MONITORING: Track authorization failure - insufficient permissions
+      authorizationFailures.labels("task", "insufficient_permissions").inc();
       return res.status(403).json({
         message: "Only the team admin or the task creator can update this task.",
       });
@@ -175,6 +185,8 @@ const deleteTask = (req, res) => {
     );
 
     if (!member) {
+      // MONITORING: Track authorization failure - not team member
+      authorizationFailures.labels("task", "not_team_member").inc();
       return res.status(403).json({
         message: "Access denied. You are not a member of this team.",
       });
@@ -194,6 +206,8 @@ const deleteTask = (req, res) => {
     const task = tasks[taskIndex];
 
     if (member.role !== "admin" && task.createdBy !== req.user.id) {
+      // MONITORING: Track authorization failure - insufficient permissions
+      authorizationFailures.labels("task", "insufficient_permissions").inc();
       return res.status(403).json({
         message: "Only the team admin or the task creator can delete this task.",
       });
