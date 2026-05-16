@@ -6,6 +6,9 @@ const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
+// MONITORING: Import Prometheus metrics
+const { metricsMiddleware, metricsEndpoint } = require("./utils/metrics");
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -15,6 +18,10 @@ app.use(helmet());
 
 // CORS: Allow requests from different origins (frontend on port 3000, other microservices)
 app.use(cors());
+
+// MONITORING: Prometheus metrics collection middleware (must be early in chain)
+// Tracks: request count, duration, status codes for all endpoints
+app.use(metricsMiddleware);
 
 // LOGGING: Log all HTTP requests (method, path, response time) for debugging and monitoring
 app.use(morgan("dev"));
@@ -42,6 +49,9 @@ const loginLimiter = rateLimit({
 app.get("/", (req, res) => {
   res.send("API Gateway Running");
 });
+
+// MONITORING: Metrics endpoint - returns Prometheus metrics in text format
+app.get("/metrics", metricsEndpoint);
 
 app.use("/auth/login", loginLimiter);
 app.use(generalLimiter);
