@@ -12,12 +12,24 @@ const { metricsMiddleware, metricsEndpoint } = require("./utils/metrics");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// SECURITY: Session configuration and CSRF token storage
+// CSRF validation requires a server-side session or cookie store
+const { sessionConfig, csrfProtection, csrfErrorHandler } = require("./middleware/csrfMiddleware");
+
 // SECURITY: Helmet middleware adds HTTP response headers to prevent common web vulnerabilities
 // This protects against: clickjacking (X-Frame-Options), XSS (CSP), MIME sniffing, etc.
 app.use(helmet());
 
-// CORS: Allow requests from different origins (frontend on port 3000, other microservices)
-app.use(cors());
+// CORS: Allow requests from frontend (port 3000) and allow browser cookies for CSRF/session tokens
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
+
+// SECURITY: Session configuration (required for CSRF token storage)
+app.use(sessionConfig);
 
 // MONITORING: Prometheus metrics collection middleware (must be early in chain)
 // Tracks: request count, duration, status codes for all endpoints
@@ -53,8 +65,18 @@ app.get("/", (req, res) => {
 // MONITORING: Metrics endpoint - returns Prometheus metrics in text format
 app.get("/metrics", metricsEndpoint);
 
+// SECURITY: CSRF token endpoint for clients to request a valid token
+// The returned token must be included in X-CSRF-Token for protected requests
+app.get("/csrf-token", (req, res) => {
+  res.json({
+    csrfToken: req.csrfToken(),
+    message: "CSRF token generated. Include in X-CSRF-Token header for state-changing requests",
+  });
+});
+
 app.use("/auth/login", loginLimiter);
 app.use(generalLimiter);
+app.use(csrfErrorHandler);
 
 app.use(
   "/auth",
@@ -62,7 +84,6 @@ app.use(
     target: process.env.AUTH_SERVICE_URL,
     changeOrigin: true,
     router: () => process.env.AUTH_SERVICE_URL,
-    pathRewrite: (path) => `/auth${path}`,
   })
 );
 
@@ -72,7 +93,6 @@ app.use(
     target: process.env.COLLAB_SERVICE_URL,
     changeOrigin: true,
     router: () => process.env.COLLAB_SERVICE_URL,
-    pathRewrite: (path) => `/teams${path}`,
   })
 );
 

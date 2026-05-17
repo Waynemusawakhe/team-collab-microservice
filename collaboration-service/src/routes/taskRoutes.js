@@ -13,9 +13,14 @@ const {
   deleteTask,
 } = require("../controllers/taskController");
 
-router.post("/", verifyToken, createTaskValidationRules, validate, createTask);
+// SECURITY: Import CSRF protection
+const { csrfProtection } = require("../middleware/csrfMiddleware");
+
+// SECURITY: Modifying endpoints (POST, PUT, DELETE) are protected with CSRF tokens
+// Read-only endpoints (GET) do not require CSRF protection
+router.post("/", verifyToken, csrfProtection, createTaskValidationRules, validate, createTask);
 router.get("/", verifyToken, getTasksByTeam);
-router.put("/:taskId", verifyToken, updateTask);
-router.delete("/:taskId", verifyToken, deleteTask);
+router.put("/:taskId", verifyToken, csrfProtection, updateTask);
+router.delete("/:taskId", verifyToken, csrfProtection, deleteTask);
 
 module.exports = router;

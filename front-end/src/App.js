@@ -13,6 +13,15 @@ function App() {
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
 
+  const getCsrfToken = async (endpoint) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: "GET",
+      credentials: "include",
+    });
+    const data = await response.json();
+    return data.csrfToken;
+  };
+
   const API_BASE_URL = "http://localhost:5000";
 
   const handleLogin = async (e) => {
@@ -20,12 +29,15 @@ function App() {
     setMessage("");
 
     try {
+      const csrfToken = await getCsrfToken("/auth/csrf-token");
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
+        credentials: "include",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await response.json();
@@ -58,9 +70,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE_URL}/teams`, {
         method: "GET",
+        credentials: "include",
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       const data = await response.json();
@@ -82,16 +95,19 @@ function App() {
     setMessage("");
 
     try {
+      const csrfToken = await getCsrfToken("/teams/csrf-token");
       const response = await fetch(`${API_BASE_URL}/teams`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          "X-CSRF-Token": csrfToken,
         },
         body: JSON.stringify({
           name: teamName,
-          description: teamDescription
-        })
+          description: teamDescription,
+        }),
       });
 
       const data = await response.json();
@@ -147,17 +163,20 @@ function App() {
     setMessage("");
 
     try {
+      const csrfToken = await getCsrfToken("/teams/csrf-token");
       const response = await fetch(`${API_BASE_URL}/teams/${selectedTeamId}/tasks`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          "X-CSRF-Token": csrfToken,
         },
         body: JSON.stringify({
           title: taskTitle,
           description: taskDescription,
-          status: "todo"
-        })
+          status: "todo",
+        }),
       });
 
       const data = await response.json();

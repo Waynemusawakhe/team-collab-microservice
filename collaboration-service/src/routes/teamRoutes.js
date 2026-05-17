@@ -8,7 +8,12 @@ const {
 } = require("../middleware/validateTeam");
 const { createTeam, getMyTeams } = require("../controllers/teamController");
 
-router.post("/", verifyToken, createTeamValidationRules, validate, createTeam);
+// SECURITY: Import CSRF protection
+const { csrfProtection } = require("../middleware/csrfMiddleware");
+
+// SECURITY: POST endpoints are protected with CSRF tokens
+// Clients must include X-CSRF-Token header or _csrf form field with valid token
+router.post("/", verifyToken, csrfProtection, createTeamValidationRules, validate, createTeam);
 router.get("/", verifyToken, getMyTeams);
 
 module.exports = router;
