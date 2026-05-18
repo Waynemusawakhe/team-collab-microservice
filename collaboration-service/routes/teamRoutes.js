@@ -115,6 +115,11 @@ router.post(
       await client.query("COMMIT");
 
       logger.info(`Team created: ${team.name} by user ${req.user.userId}`);
+      logger.audit("TEAM_CREATED", {
+        teamId: team.id,
+        ownerId: req.user.userId,
+        requestId: req.requestId,
+      });
 
       res.status(201).json({
         message: "Team created",
@@ -269,6 +274,77 @@ router.delete("/:teamId", authenticate, [uuidParam("teamId")], async (req, res) 
 // =====================================
 // ADD MEMBER
 // =====================================
+router.get("/:teamId/members", authenticate, [uuidParam("teamId")], async (req, res) => {
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+
+    logger.error("Validation failed while fetching team members");
+
+    return res.status(400).json({
+      errors: errors.array(),
+    });
+  }
+
+  const { teamId } = req.params;
+
+  try {
+
+    const memberCheck = await pool.query(
+
+      "SELECT role FROM team_members WHERE team_id = $1 AND user_id = $2",
+
+      [teamId, req.user.userId]
+    );
+
+    if (memberCheck.rows.length === 0) {
+
+      logger.error(`Unauthorized member list attempt by user ${req.user.userId}`);
+      logger.audit("TEAM_MEMBERS_UNAUTHORIZED", {
+        teamId,
+        userId: req.user.userId,
+        requestId: req.requestId,
+      });
+
+      return res.status(403).json({
+        message: "Access denied: not a member of this team",
+      });
+    }
+
+    const result = await pool.query(
+
+      `SELECT user_id, role, joined_at
+       FROM team_members
+       WHERE team_id = $1
+       ORDER BY role ASC, joined_at ASC`,
+
+      [teamId]
+    );
+
+    logger.info(`User ${req.user.userId} fetched members for team ${teamId}`);
+
+    res.json({
+      members: result.rows,
+      currentUserRole: memberCheck.rows[0].role,
+    });
+
+  } catch (err) {
+
+    console.error("Fetch members error:", err.message);
+
+    logger.error(`Fetch members error: ${err.message}`);
+
+    res.status(500).json({
+      message: "Server error fetching team members",
+    });
+  }
+});
+
+
+// =====================================
+// ADD MEMBER
+// =====================================
 router.post(
   "/:teamId/members",
   authenticate,
@@ -316,23 +392,42 @@ router.post(
     if (!adminCheck.rows[0] || adminCheck.rows[0].role !== "admin") {
 
       logger.error(`Unauthorized member add attempt by user ${req.user.userId}`);
+      logger.audit("TEAM_MEMBER_ASSIGNMENT_DENIED", {
+        teamId,
+        actingUserId: req.user.userId,
+        targetUserId: userId,
+        role,
+        requestId: req.requestId,
+      });
 
       return res.status(403).json({
         message: "Only admins can add members",
       });
     }
 
-    await pool.query(
+    const result = await pool.query(
 
-      "INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+      `INSERT INTO team_members (team_id, user_id, role)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (team_id, user_id)
+       DO UPDATE SET role = EXCLUDED.role
+       RETURNING user_id, role, joined_at`,
 
       [teamId, userId, role]
     );
 
-    logger.info(`User ${userId} added to team ${teamId}`);
+    logger.info(`User ${userId} added to team ${teamId} as ${role}`);
+    logger.audit("TEAM_MEMBER_ROLE_SAVED", {
+      teamId,
+      actingUserId: req.user.userId,
+      targetUserId: userId,
+      role,
+      requestId: req.requestId,
+    });
 
     res.status(201).json({
       message: "Member added",
+      member: result.rows[0],
     });
 
   } catch (err) {

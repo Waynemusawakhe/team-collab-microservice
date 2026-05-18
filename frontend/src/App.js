@@ -115,6 +115,44 @@ function Input({ label, ...props }) {
 
 
 // =====================================================
+// SELECT COMPONENT
+// =====================================================
+
+function Select({ label, children, ...props }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label
+        style={{
+          display: "block",
+          marginBottom: 5,
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#374151",
+        }}
+      >
+        {label}
+      </label>
+
+      <select
+        {...props}
+        style={{
+          width: "100%",
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: "1px solid #D1D5DB",
+          fontSize: 14,
+          boxSizing: "border-box",
+          background: "#fff",
+        }}
+      >
+        {children}
+      </select>
+    </div>
+  );
+}
+
+
+// =====================================================
 // BUTTON COMPONENT
 // =====================================================
 
@@ -227,6 +265,32 @@ function Badge({ status }) {
       }}
     >
       {s.label}
+    </span>
+  );
+}
+
+
+// =====================================================
+// ROLE BADGE
+// =====================================================
+
+function RoleBadge({ role }) {
+
+  const isAdmin = role === "admin";
+
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        background: isAdmin ? "#FEE2E2" : "#DBEAFE",
+        color: isAdmin ? "#991B1B" : "#1E40AF",
+        padding: "5px 10px",
+        borderRadius: 20,
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      {role.toUpperCase()}
     </span>
   );
 }
@@ -431,13 +495,25 @@ function TaskPanel({
 
   const [tasks, setTasks] = useState([]);
 
+  const [members, setMembers] = useState([]);
+
+  const [users, setUsers] = useState([]);
+
   const [title, setTitle] = useState("");
 
   const [description, setDescription] = useState("");
 
+  const [selectedUserId, setSelectedUserId] = useState("");
+
+  const [selectedRole, setSelectedRole] = useState("member");
+
+  const [selectedTaskAssigneeId, setSelectedTaskAssigneeId] = useState("");
+
   const [alert, setAlert] = useState(null);
 
   const [loading, setLoading] = useState(false);
+
+  const [memberLoading, setMemberLoading] = useState(false);
 
 
   const loadTasks = useCallback(async () => {
@@ -463,9 +539,69 @@ function TaskPanel({
   }, [team.id, token]);
 
 
+  const loadMembers = useCallback(async () => {
+
+    try {
+
+      const data = await request(
+        `/teams/${team.id}/members`,
+        {},
+        token
+      );
+
+      const teamMembers = data.members || [];
+
+      setMembers(teamMembers);
+
+      setSelectedTaskAssigneeId((currentAssigneeId) =>
+        currentAssigneeId || teamMembers[0]?.user_id || userId || ""
+      );
+
+    } catch (err) {
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
+    }
+
+  }, [team.id, token, userId]);
+
+
+  const loadUsers = useCallback(async () => {
+
+    try {
+
+      const data = await request(
+        "/auth/users",
+        {},
+        token
+      );
+
+      const availableUsers = data.users || [];
+
+      setUsers(availableUsers);
+
+      setSelectedUserId((currentUserId) =>
+        currentUserId || availableUsers[0]?.id || ""
+      );
+
+    } catch (err) {
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
+    }
+
+  }, [token]);
+
+
   useEffect(() => {
     loadTasks();
-  }, [loadTasks]);
+    loadMembers();
+    loadUsers();
+  }, [loadTasks, loadMembers, loadUsers]);
 
 
   async function createTask(e) {
@@ -484,6 +620,10 @@ function TaskPanel({
             title,
             description,
             status: "todo",
+            assignedTo:
+              team.role === "admin"
+                ? selectedTaskAssigneeId
+                : userId,
           }),
         },
         token
@@ -507,6 +647,87 @@ function TaskPanel({
     }
   }
 
+
+  async function updateTaskAssignee(taskId, assignedTo) {
+
+    try {
+
+      await request(
+        `/teams/${team.id}/tasks/${taskId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            assignedTo,
+          }),
+        },
+        token
+      );
+
+      await loadTasks();
+
+      setAlert({
+        type: "success",
+        message: "Task assignee updated.",
+      });
+
+    } catch (err) {
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
+    }
+  }
+
+
+  async function addMember(e) {
+
+    e.preventDefault();
+
+    setMemberLoading(true);
+
+    try {
+
+      await request(
+        `/teams/${team.id}/members`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            userId: selectedUserId,
+            role: selectedRole,
+          }),
+        },
+        token
+      );
+
+      await loadMembers();
+
+      setAlert({
+        type: "success",
+        message: "Team member role saved.",
+      });
+
+    } catch (err) {
+
+      setAlert({
+        type: "error",
+        message: err.message,
+      });
+
+    } finally {
+
+      setMemberLoading(false);
+    }
+  }
+
+
+  function userEmailFor(userIdToFind) {
+
+    const user = users.find((item) => item.id === userIdToFind);
+
+    return user ? user.email : userIdToFind;
+  }
+
   return (
     <div>
 
@@ -528,27 +749,8 @@ function TaskPanel({
           {team.description}
         </p>
 
-        <div
-          style={{
-            marginTop: 14,
-            display: "inline-block",
-            background:
-              team.role === "admin"
-                ? "#FEE2E2"
-                : "#DBEAFE",
-
-            color:
-              team.role === "admin"
-                ? "#991B1B"
-                : "#1E40AF",
-
-            padding: "6px 12px",
-            borderRadius: 20,
-            fontSize: 12,
-            fontWeight: 700,
-          }}
-        >
-          {team.role.toUpperCase()}
+        <div style={{ marginTop: 14 }}>
+          <RoleBadge role={team.role} />
         </div>
 
         <p
@@ -560,8 +762,109 @@ function TaskPanel({
         >
           {team.role === "admin"
             ? "Admins can manage all tasks and team members."
-            : "Members can manage only their own tasks."}
+            : "Members can view and update tasks assigned to them."}
         </p>
+
+      </Card>
+
+      <Card style={{ marginBottom: 24 }}>
+
+        <h3>Team Members</h3>
+
+        <p
+          style={{
+            color: "#6B7280",
+            fontSize: 13,
+            lineHeight: 1.6,
+          }}
+        >
+          Roles are assigned per team. Team creators become admins, and admins can add users as members or admins.
+        </p>
+
+        {members.length === 0 && (
+          <p>No team members found.</p>
+        )}
+
+        {members.map((member) => (
+          <div
+            key={member.user_id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              borderTop: "1px solid #E5E7EB",
+              padding: "12px 0",
+              gap: 12,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontWeight: 600,
+                  color: "#111827",
+                }}
+              >
+                {userEmailFor(member.user_id)}
+              </div>
+
+              <div
+                style={{
+                  color: "#6B7280",
+                  fontSize: 12,
+                  marginTop: 4,
+                }}
+              >
+                {member.user_id}
+              </div>
+            </div>
+
+            <RoleBadge role={member.role} />
+          </div>
+        ))}
+
+        {team.role === "admin" && (
+          <form
+            onSubmit={addMember}
+            style={{
+              borderTop: "1px solid #E5E7EB",
+              marginTop: 12,
+              paddingTop: 16,
+            }}
+          >
+            <Select
+              label="User"
+              value={selectedUserId}
+              required
+              onChange={(e) => setSelectedUserId(e.target.value)}
+            >
+              {users.map((user) => (
+                <option
+                  key={user.id}
+                  value={user.id}
+                >
+                  {user.email}
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              label="Team Role"
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+            >
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </Select>
+
+            <Button
+              type="submit"
+              loading={memberLoading}
+              disabled={!selectedUserId}
+            >
+              Save Member Role
+            </Button>
+          </form>
+        )}
 
       </Card>
 
@@ -591,9 +894,37 @@ function TaskPanel({
             onChange={(e) => setDescription(e.target.value)}
           />
 
+          {team.role === "admin" ? (
+            <Select
+              label="Assign To"
+              value={selectedTaskAssigneeId}
+              required
+              onChange={(e) => setSelectedTaskAssigneeId(e.target.value)}
+            >
+              {members.map((member) => (
+                <option
+                  key={member.user_id}
+                  value={member.user_id}
+                >
+                  {userEmailFor(member.user_id)}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <p
+              style={{
+                color: "#6B7280",
+                fontSize: 13,
+              }}
+            >
+              New tasks you create are assigned to you.
+            </p>
+          )}
+
           <Button
             type="submit"
             loading={loading}
+            disabled={team.role === "admin" && !selectedTaskAssigneeId}
           >
             Create Task
           </Button>
@@ -643,6 +974,40 @@ function TaskPanel({
                 </p>
 
                 <Badge status={task.status} />
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    color: "#374151",
+                    fontSize: 13,
+                  }}
+                >
+                  Assigned to: <strong>{userEmailFor(task.assigned_to)}</strong>
+                </div>
+
+                {team.role === "admin" && (
+                  <div style={{ marginTop: 12, maxWidth: 320 }}>
+                    <Select
+                      label="Reassign Task"
+                      value={task.assigned_to}
+                      onChange={(e) =>
+                        updateTaskAssignee(
+                          task.id,
+                          e.target.value
+                        )
+                      }
+                    >
+                      {members.map((member) => (
+                        <option
+                          key={member.user_id}
+                          value={member.user_id}
+                        >
+                          {userEmailFor(member.user_id)}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
 
               </div>
 
@@ -862,27 +1227,8 @@ function TeamsScreen({
                 {team.description}
               </p>
 
-              <div
-                style={{
-                  display: "inline-block",
-                  marginTop: 6,
-                  background:
-                    team.role === "admin"
-                      ? "#FEE2E2"
-                      : "#DBEAFE",
-
-                  color:
-                    team.role === "admin"
-                      ? "#991B1B"
-                      : "#1E40AF",
-
-                  padding: "5px 10px",
-                  borderRadius: 20,
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                {team.role.toUpperCase()}
+              <div style={{ marginTop: 6 }}>
+                <RoleBadge role={team.role} />
               </div>
 
             </div>

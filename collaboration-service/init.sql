@@ -29,10 +29,23 @@ CREATE TABLE IF NOT EXISTS tasks (
   description TEXT,
   status      VARCHAR(50)  NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done')),
   creator_id  UUID         NOT NULL,
+  assigned_to UUID         NOT NULL,
   created_at  TIMESTAMPTZ  DEFAULT NOW()
 );
+
+-- Upgrade path for existing local databases created before task assignment.
+ALTER TABLE tasks
+  ADD COLUMN IF NOT EXISTS assigned_to UUID;
+
+UPDATE tasks
+SET assigned_to = creator_id
+WHERE assigned_to IS NULL;
+
+ALTER TABLE tasks
+  ALTER COLUMN assigned_to SET NOT NULL;
 
 -- Useful indexes
 CREATE INDEX IF NOT EXISTS idx_team_members_user  ON team_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_team         ON tasks(team_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_creator      ON tasks(creator_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to  ON tasks(assigned_to);

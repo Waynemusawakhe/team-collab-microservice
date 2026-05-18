@@ -1,4 +1,7 @@
 const winston = require("winston");
+const fs = require("fs");
+
+fs.mkdirSync("logs", { recursive: true });
 
 const logger = winston.createLogger({
 
@@ -26,8 +29,17 @@ const logger = winston.createLogger({
       filename: "logs/combined.log",
     }),
 
+    new winston.transports.File({
+      filename: "logs/audit.log",
+      level: "info",
+    }),
+
     new winston.transports.Console(),
   ],
 });
+
+logger.audit = (event, details = {}) => {
+  logger.info(`AUDIT ${event} ${JSON.stringify(details)}`);
+};
 
 module.exports = logger;
