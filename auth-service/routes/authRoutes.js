@@ -24,6 +24,7 @@ router.post(
   [
     body("email")
       .isEmail()
+      .normalizeEmail()
       .withMessage("Valid email required"),
 
     body("password")
@@ -100,6 +101,7 @@ router.post(
   [
     body("email")
       .isEmail()
+      .normalizeEmail()
       .withMessage("Valid email required"),
 
     body("password")

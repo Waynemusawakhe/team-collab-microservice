@@ -1,6 +1,6 @@
 const express = require("express");
 
-const { body, validationResult } = require("express-validator");
+const { body, param, validationResult } = require("express-validator");
 
 const pool = require("../db");
 
@@ -11,6 +11,11 @@ const logger = require("../src/utils/logger");
 
 // mergeParams allows access to :teamId
 const router = express.Router({ mergeParams: true });
+
+const uuidParam = (name) =>
+  param(name)
+    .isUUID()
+    .withMessage(`${name} must be a valid UUID`);
 
 
 // =====================================
@@ -43,7 +48,18 @@ async function requireMember(teamId, userId, res) {
 // =====================================
 // GET TASKS
 // =====================================
-router.get("/", authenticate, async (req, res) => {
+router.get("/", authenticate, [uuidParam("teamId")], async (req, res) => {
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+
+    logger.error("Validation failed while fetching tasks");
+
+    return res.status(400).json({
+      errors: errors.array(),
+    });
+  }
 
   const { teamId } = req.params;
 
@@ -95,9 +111,17 @@ router.post(
   authenticate,
 
   [
+    uuidParam("teamId"),
+
     body("title")
+      .trim()
       .notEmpty()
       .withMessage("Task title is required"),
+
+    body("description")
+      .optional({ checkFalsy: true })
+      .trim()
+      .escape(),
 
     body("status")
       .optional()
@@ -183,6 +207,21 @@ router.patch(
   authenticate,
 
   [
+    uuidParam("teamId"),
+
+    uuidParam("taskId"),
+
+    body("title")
+      .optional({ checkFalsy: true })
+      .trim()
+      .notEmpty()
+      .withMessage("Task title cannot be empty"),
+
+    body("description")
+      .optional({ checkFalsy: true })
+      .trim()
+      .escape(),
+
     body("status")
       .optional()
       .isIn(["todo", "in_progress", "done"])
@@ -294,7 +333,18 @@ router.patch(
 // =====================================
 // DELETE TASK
 // =====================================
-router.delete("/:taskId", authenticate, async (req, res) => {
+router.delete("/:taskId", authenticate, [uuidParam("teamId"), uuidParam("taskId")], async (req, res) => {
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+
+    logger.error("Validation failed while deleting task");
+
+    return res.status(400).json({
+      errors: errors.array(),
+    });
+  }
 
   const { teamId, taskId } = req.params;
 

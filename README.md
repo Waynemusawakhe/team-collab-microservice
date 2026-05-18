@@ -70,35 +70,35 @@ psql -d collab_db -f collaboration-service/init.sql
 
 ## 2. Environment Variables
 
-Edit the `.env` file in each service folder. **Change `DB_PASSWORD` and `JWT_SECRET` before running.**
+Copy each `.env.example` file to `.env` in the same folder, then set your local values. **Do not commit `.env` files.** Use a long random `JWT_SECRET`, and use the same value in `auth-service` and `collaboration-service`.
 
-### api-gateway/.env
+### api-gateway/.env.example
 ```
 PORT=5000
 AUTH_SERVICE_URL=http://localhost:5001
 COLLAB_SERVICE_URL=http://localhost:5002
 ```
 
-### auth-service/.env
+### auth-service/.env.example
 ```
 PORT=5001
-JWT_SECRET=changeme_use_a_long_random_string
+JWT_SECRET=replace_with_a_long_random_secret_used_by_all_services
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=auth_db
 DB_USER=postgres
-DB_PASSWORD=yourpassword
+DB_PASSWORD=replace_with_your_local_database_password
 ```
 
-### collaboration-service/.env
+### collaboration-service/.env.example
 ```
 PORT=5002
-JWT_SECRET=changeme_use_a_long_random_string
+JWT_SECRET=replace_with_the_same_long_random_secret_as_auth_service
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=collab_db
 DB_USER=postgres
-DB_PASSWORD=yourpassword
+DB_PASSWORD=replace_with_your_local_database_password
 ```
 
 > **Important:** `JWT_SECRET` must be identical in both `auth-service` and `collaboration-service`.
@@ -206,9 +206,27 @@ All requests go through the **API Gateway on port 5000**.
 | Password hashing | Auth Service — bcrypt (10 rounds)          |
 | JWT auth         | Auth Service issues, Collaboration verifies|
 | Role checks      | Collaboration Service (admin / member)     |
-| Input validation | express-validator in both services         |
-| Rate limiting    | API Gateway — 100 req/15min general, 5 login|
+| Input validation | express-validator in both services; UUID, role, email, and status checks |
+| SQL injection prevention | Parameterized PostgreSQL queries using `$1`, `$2`, etc. |
+| XSS reduction | Text input trimming and escaping on write paths |
+| Rate limiting    | API Gateway - 100 req/15min general, 5 login |
 | Request logging  | Morgan in all services                     |
+
+### Security Patterns Applied
+
+| Pattern | Implementation |
+|---------|----------------|
+| API Gateway | All frontend requests target the gateway on port 5000. The gateway routes requests to internal services. |
+| Authenticator | The auth service validates credentials, hashes passwords with bcrypt, and issues JWTs. |
+| Authorization / RBAC | Collaboration endpoints check team membership and admin/member roles before allowing access. |
+| Secure Password Storage | Plaintext passwords are never stored; bcrypt hashes are stored in PostgreSQL. |
+| Input Validation | `express-validator` rejects malformed emails, UUIDs, task statuses, and roles before database access. |
+| Audit Logging | Morgan logs HTTP traffic and Winston writes application/security events to service logs. |
+| Rate Limiting | The gateway limits general traffic and applies stricter limits to login attempts. |
+
+### Repository Hygiene
+
+The repository uses a root `.gitignore` to exclude local secrets, dependencies, build output, and runtime logs. Commit the `.env.example` files only; keep real `.env` values local.
 
 ---
 

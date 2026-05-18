@@ -1,6 +1,6 @@
 const express = require("express");
 
-const { body, validationResult } = require("express-validator");
+const { body, param, validationResult } = require("express-validator");
 
 const pool = require("../db");
 
@@ -10,6 +10,11 @@ const logger = require("../src/utils/logger");
 
 
 const router = express.Router();
+
+const uuidParam = (name) =>
+  param(name)
+    .isUUID()
+    .withMessage(`${name} must be a valid UUID`);
 
 
 // =====================================
@@ -60,8 +65,14 @@ router.post(
 
   [
     body("name")
+      .trim()
       .notEmpty()
       .withMessage("Team name is required"),
+
+    body("description")
+      .optional({ checkFalsy: true })
+      .trim()
+      .escape(),
   ],
 
   async (req, res) => {
@@ -133,7 +144,18 @@ router.post(
 // =====================================
 // GET SINGLE TEAM
 // =====================================
-router.get("/:teamId", authenticate, async (req, res) => {
+router.get("/:teamId", authenticate, [uuidParam("teamId")], async (req, res) => {
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+
+    logger.error("Validation failed while fetching team");
+
+    return res.status(400).json({
+      errors: errors.array(),
+    });
+  }
 
   const { teamId } = req.params;
 
@@ -192,7 +214,18 @@ router.get("/:teamId", authenticate, async (req, res) => {
 // =====================================
 // DELETE TEAM
 // =====================================
-router.delete("/:teamId", authenticate, async (req, res) => {
+router.delete("/:teamId", authenticate, [uuidParam("teamId")], async (req, res) => {
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+
+    logger.error("Validation failed while deleting team");
+
+    return res.status(400).json({
+      errors: errors.array(),
+    });
+  }
 
   const { teamId } = req.params;
 
@@ -236,20 +269,40 @@ router.delete("/:teamId", authenticate, async (req, res) => {
 // =====================================
 // ADD MEMBER
 // =====================================
-router.post("/:teamId/members", authenticate, async (req, res) => {
+router.post(
+  "/:teamId/members",
+  authenticate,
+  [
+    uuidParam("teamId"),
+
+    body("userId")
+      .notEmpty()
+      .withMessage("userId is required")
+      .bail()
+      .isUUID()
+      .withMessage("userId must be a valid UUID"),
+
+    body("role")
+      .optional()
+      .isIn(["admin", "member"])
+      .withMessage("Role must be admin or member"),
+  ],
+  async (req, res) => {
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+
+    logger.error("Validation failed while adding team member");
+
+    return res.status(400).json({
+      errors: errors.array(),
+    });
+  }
 
   const { teamId } = req.params;
 
   const { userId, role = "member" } = req.body;
-
-  if (!userId) {
-
-    logger.error("Attempt to add member without userId");
-
-    return res.status(400).json({
-      message: "userId is required",
-    });
-  }
 
   try {
 
@@ -292,7 +345,8 @@ router.post("/:teamId/members", authenticate, async (req, res) => {
       message: "Server error adding member",
     });
   }
-});
+  }
+);
 
 
 module.exports = router;
